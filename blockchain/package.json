@@ -1,0 +1,23 @@
+{
+  "name": "secura-blockchain",
+  "version": "0.1.0",
+  "description": "Blockchain integration for Secura",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "compile": "truffle compile",
+    "migrate": "truffle migrate",
+    "test": "truffle test",
+    "migrate:ganache": "truffle migrate --network ganache"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.8.0",
+    "@truffle/hdwallet-provider": "^2.1.4"
+  },
+  "devDependencies": {
+    "truffle": "^5.7.3",
+    "truffle-plugin-verify": "^0.6.1"
+  }
+} 
