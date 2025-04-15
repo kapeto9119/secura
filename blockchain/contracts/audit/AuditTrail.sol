@@ -69,7 +69,12 @@ contract AuditTrail {
     /**
      * @dev Get a specific log entry by index
      * @param index The index of the log entry
-     * @return The log entry details
+     * @return recorder Address of the recorder
+     * @return userIdentifier User identifier string
+     * @return actionType Type of action
+     * @return contentHash Hash of the content
+     * @return metadata Additional metadata
+     * @return timestamp Time when log was recorded
      */
     function getLog(uint256 index) public view returns (
         address recorder,

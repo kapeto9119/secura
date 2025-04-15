@@ -46,4 +46,11 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON api_keys(user_id);
 -- Insert a default admin user (password: admin123)
 INSERT INTO users (external_id, username, email, password_hash, role)
 VALUES ('user-123', 'admin', 'admin@example.com', '$2a$10$zL.MmDQXIaQNgVLTj6Shs.Xs.R2f1QZn2qWbGa.EOOE3NwR9F5G8.', 'admin')
-ON CONFLICT (username) DO NOTHING; 
+ON CONFLICT (username) DO NOTHING;
+
+-- Initialize database
+CREATE TABLE IF NOT EXISTS migrations (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+); 
