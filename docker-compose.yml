@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # API Gateway (Go Service)
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=development
+      - NLP_SERVICE_URL=http://nlp:8000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=secura
+      - DB_PASSWORD=securapassword
+      - DB_NAME=secura
+      - BLOCKCHAIN_NODE_URL=http://ganache:8545
+    volumes:
+      - ./api:/app
+    depends_on:
+      - postgres
+      - nlp
+      - ganache
+    networks:
+      - secura-network
+
+  # NLP Anonymization Service (Python)
+  nlp:
+    build:
+      context: ./nlp
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=debug
+    volumes:
+      - ./nlp:/app
+    networks:
+      - secura-network
+
+  # Local Blockchain for Development (Ganache)
+  ganache:
+    image: trufflesuite/ganache-cli:latest
+    ports:
+      - "8545:8545"
+    command: --deterministic --mnemonic "test test test test test test test test test test test junk" --networkId 5777 --chainId 1337
+    networks:
+      - secura-network
+
+  # Database (PostgreSQL)
+  postgres:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=secura
+      - POSTGRES_PASSWORD=securapassword
+      - POSTGRES_DB=secura
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - secura-network
+
+  # Admin Dashboard (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - API_URL=http://api:8080
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - secura-network
+
+  # IPFS Node (for decentralized storage, optional for MVP)
+  ipfs:
+    image: ipfs/go-ipfs:latest
+    ports:
+      - "5001:5001"
+      - "8081:8080"
+    volumes:
+      - ipfs-data:/data/ipfs
+    networks:
+      - secura-network
+
+networks:
+  secura-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  ipfs-data: 
