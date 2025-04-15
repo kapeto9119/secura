@@ -48,6 +48,7 @@ func LLMCompletion(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 
 		// Get user ID from context
 		userID, _ := c.Get("userID")
+		logger.Info("Processing completion request", zap.String("user_id", userID.(string)), zap.String("model", req.Model))
 
 		// Anonymize the prompt
 		anonService := services.NewAnonymizationService(cfg.NLPServiceURL)
@@ -97,6 +98,7 @@ func LLMChat(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 
 		// Get user ID from context
 		userID, _ := c.Get("userID")
+		logger.Info("Processing chat request", zap.String("user_id", userID.(string)), zap.String("model", req.Model))
 
 		// Anonymize the messages
 		anonService := services.NewAnonymizationService(cfg.NLPServiceURL)

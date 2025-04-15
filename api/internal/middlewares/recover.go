@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"log"
 	"net/http"
 	"runtime/debug"
 
@@ -14,7 +15,8 @@ func Recover() gin.HandlerFunc {
 			if err := recover(); err != nil {
 				// Log the error and stack trace
 				debugStack := debug.Stack()
-				
+				log.Printf("Recovery from panic: %v\nStack trace: %s", err, debugStack)
+
 				// Return a 500 error
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"error": "Internal Server Error",
@@ -23,4 +25,4 @@ func Recover() gin.HandlerFunc {
 		}()
 		c.Next()
 	}
-} 
+}
