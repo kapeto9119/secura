@@ -10,6 +10,7 @@ services:
       - "8080:8080"
     environment:
       - APP_ENV=development
+      - LOG_LEVEL=debug
       - NLP_SERVICE_URL=http://nlp:8000
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -17,6 +18,9 @@ services:
       - DB_PASSWORD=securapassword
       - DB_NAME=secura
       - BLOCKCHAIN_NODE_URL=http://ganache:8545
+      - BLOCKCHAIN_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
+      - JWT_SECRET=secura-dev-secret-key
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     volumes:
       - ./api:/app
     depends_on:
@@ -36,6 +40,7 @@ services:
     environment:
       - ENVIRONMENT=development
       - LOG_LEVEL=debug
+      - SPACY_MODEL=en_core_web_sm
     volumes:
       - ./nlp:/app
     networks:
@@ -47,8 +52,23 @@ services:
     ports:
       - "8545:8545"
     command: --deterministic --mnemonic "test test test test test test test test test test test junk" --networkId 5777 --chainId 1337
+    volumes:
+      - ganache-data:/data
     networks:
       - secura-network
+
+  # Deploy Smart Contracts
+  truffle-migrate:
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile.deploy
+    volumes:
+      - ./blockchain:/app
+    depends_on:
+      - ganache
+    networks:
+      - secura-network
+    command: ["sh", "-c", "sleep 5 && npm run migrate:ganache"]
 
   # Database (PostgreSQL)
   postgres:
@@ -83,6 +103,26 @@ services:
     networks:
       - secura-network
 
+  # Database Migration Tool
+  db-migrate:
+    image: postgres:13
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=secura
+      - DB_PASSWORD=securapassword
+      - DB_NAME=secura
+    volumes:
+      - ./db/migrations:/migrations
+      - ./scripts/db:/scripts
+    depends_on:
+      - postgres
+    networks:
+      - secura-network
+    command: ["bash", "/scripts/migrate.sh", "up"]
+    profiles:
+      - tools
+
   # IPFS Node (for decentralized storage, optional for MVP)
   ipfs:
     image: ipfs/go-ipfs:latest
@@ -100,4 +140,5 @@ networks:
 
 volumes:
   postgres-data:
+  ganache-data:
   ipfs-data: 
