@@ -45,12 +45,9 @@ func SetupRouter(cfg *config.Config, logger *zap.Logger) *gin.Engine {
 				llmRoutes.POST("/chat", LLMChat(cfg, logger))
 			}
 
-			// Audit routes
+			// Audit routes with blockchain integration
 			auditRoutes := protected.Group("/audit")
-			{
-				auditRoutes.GET("/logs", GetAuditLogs())
-				auditRoutes.GET("/logs/:id", GetAuditLog())
-			}
+			SetupAuditHandlers(auditRoutes, cfg, logger)
 		}
 	}
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -37,6 +38,23 @@ type Message struct {
 
 // LLMCompletion handles completion requests
 func LLMCompletion(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
+	// Create services
+	anonService := services.NewAnonymizationService(cfg.NLPServiceURL)
+
+	// Initialize blockchain service if enabled
+	var blockchainService *services.BlockchainService
+	if cfg.BlockchainNodeURL != "" {
+		var err error
+		blockchainService, err = services.NewBlockchainService(
+			cfg.BlockchainNodeURL,
+			cfg.BlockchainContractAddress,
+			logger,
+		)
+		if err != nil {
+			logger.Error("Failed to initialize blockchain service", zap.Error(err))
+		}
+	}
+
 	return func(c *gin.Context) {
 		var req CompletionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -51,7 +69,6 @@ func LLMCompletion(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		logger.Info("Processing completion request", zap.String("user_id", userID.(string)), zap.String("model", req.Model))
 
 		// Anonymize the prompt
-		anonService := services.NewAnonymizationService(cfg.NLPServiceURL)
 		anonymizedPrompt, err := anonService.AnonymizeText(req.Prompt)
 		if err != nil {
 			logger.Error("Failed to anonymize prompt", zap.Error(err))
@@ -61,7 +78,7 @@ func LLMCompletion(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		// Forward to OpenAI
+		// Prepare OpenAI request
 		openaiReq := map[string]interface{}{
 			"prompt":      anonymizedPrompt,
 			"model":       req.Model,
@@ -69,6 +86,7 @@ func LLMCompletion(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			"temperature": req.Temperature,
 		}
 
+		// Forward to OpenAI
 		resp, err := forwardToOpenAI(cfg.OpenAIAPIKey, "https://api.openai.com/v1/completions", openaiReq)
 		if err != nil {
 			logger.Error("Failed to call OpenAI", zap.Error(err))
@@ -78,7 +96,41 @@ func LLMCompletion(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		// TODO: Store in blockchain audit trail
+		// Record in blockchain audit trail if enabled
+		if blockchainService != nil {
+			// Create metadata
+			metadata := map[string]interface{}{
+				"model":          req.Model,
+				"anonymized":     true,
+				"request_tokens": len(req.Prompt),
+				"ip_address":     c.ClientIP(),
+				"user_agent":     c.Request.UserAgent(),
+			}
+
+			// Add response tokens if available
+			if usage, ok := resp["usage"].(map[string]interface{}); ok {
+				if totalTokens, ok := usage["total_tokens"].(float64); ok {
+					metadata["total_tokens"] = totalTokens
+				}
+			}
+
+			// Record interaction in blockchain
+			ctx := context.Background()
+			txHash, err := blockchainService.RecordLLMInteraction(
+				ctx,
+				userID.(string),
+				"completion",
+				openaiReq,
+				resp,
+				metadata,
+			)
+
+			if err != nil {
+				logger.Error("Failed to record audit log", zap.Error(err))
+			} else {
+				logger.Info("Recorded audit log", zap.String("tx_hash", txHash))
+			}
+		}
 
 		// Return response to client
 		c.JSON(http.StatusOK, resp)
@@ -87,6 +139,23 @@ func LLMCompletion(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 
 // LLMChat handles chat requests
 func LLMChat(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
+	// Create services
+	anonService := services.NewAnonymizationService(cfg.NLPServiceURL)
+
+	// Initialize blockchain service if enabled
+	var blockchainService *services.BlockchainService
+	if cfg.BlockchainNodeURL != "" {
+		var err error
+		blockchainService, err = services.NewBlockchainService(
+			cfg.BlockchainNodeURL,
+			cfg.BlockchainContractAddress,
+			logger,
+		)
+		if err != nil {
+			logger.Error("Failed to initialize blockchain service", zap.Error(err))
+		}
+	}
+
 	return func(c *gin.Context) {
 		var req ChatRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -101,7 +170,6 @@ func LLMChat(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 		logger.Info("Processing chat request", zap.String("user_id", userID.(string)), zap.String("model", req.Model))
 
 		// Anonymize the messages
-		anonService := services.NewAnonymizationService(cfg.NLPServiceURL)
 		for i, msg := range req.Messages {
 			anonymizedContent, err := anonService.AnonymizeText(msg.Content)
 			if err != nil {
@@ -114,7 +182,7 @@ func LLMChat(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			req.Messages[i].Content = anonymizedContent
 		}
 
-		// Forward to OpenAI
+		// Prepare OpenAI request
 		openaiReq := map[string]interface{}{
 			"messages":    req.Messages,
 			"model":       req.Model,
@@ -122,6 +190,7 @@ func LLMChat(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			"temperature": req.Temperature,
 		}
 
+		// Forward to OpenAI
 		resp, err := forwardToOpenAI(cfg.OpenAIAPIKey, "https://api.openai.com/v1/chat/completions", openaiReq)
 		if err != nil {
 			logger.Error("Failed to call OpenAI", zap.Error(err))
@@ -131,7 +200,41 @@ func LLMChat(cfg *config.Config, logger *zap.Logger) gin.HandlerFunc {
 			return
 		}
 
-		// TODO: Store in blockchain audit trail
+		// Record in blockchain audit trail if enabled
+		if blockchainService != nil {
+			// Create metadata
+			metadata := map[string]interface{}{
+				"model":      req.Model,
+				"anonymized": true,
+				"messages":   len(req.Messages),
+				"ip_address": c.ClientIP(),
+				"user_agent": c.Request.UserAgent(),
+			}
+
+			// Add response tokens if available
+			if usage, ok := resp["usage"].(map[string]interface{}); ok {
+				if totalTokens, ok := usage["total_tokens"].(float64); ok {
+					metadata["total_tokens"] = totalTokens
+				}
+			}
+
+			// Record interaction in blockchain
+			ctx := context.Background()
+			txHash, err := blockchainService.RecordLLMInteraction(
+				ctx,
+				userID.(string),
+				"chat",
+				openaiReq,
+				resp,
+				metadata,
+			)
+
+			if err != nil {
+				logger.Error("Failed to record audit log", zap.Error(err))
+			} else {
+				logger.Info("Recorded audit log", zap.String("tx_hash", txHash))
+			}
+		}
 
 		// Return response to client
 		c.JSON(http.StatusOK, resp)
