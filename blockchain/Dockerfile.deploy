@@ -9,7 +9,7 @@ RUN apk add --update --no-cache bash python3 make g++ git
 COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy the rest of the code
 COPY . .

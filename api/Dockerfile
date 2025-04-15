@@ -1,7 +1,7 @@
 # Build stage
 FROM golang:1.20-alpine AS builder
 
-# Install git and other dependencies
+# Install git for fetching dependencies
 RUN apk add --no-cache git
 
 # Set working directory
@@ -16,13 +16,13 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o secura-api ./cmd/server
 
-# Final stage
+# Use a minimal alpine image for the final container
 FROM alpine:3.18
 
-# Install required packages
+# Add CA certificates and timezone data
 RUN apk --no-cache add ca-certificates tzdata
 
 # Set working directory
@@ -34,5 +34,5 @@ COPY --from=builder /app/secura-api .
 # Expose port
 EXPOSE 8080
 
-# Run the application
+# Start the application
 CMD ["./secura-api"] 
